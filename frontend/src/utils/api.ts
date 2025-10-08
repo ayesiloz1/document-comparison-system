@@ -1,4 +1,4 @@
-import { ComparisonResult } from './types';
+import { ComparisonResult, SectionComparisonResult } from './types';
 
 export const compareDocuments = async (pdfA: File, pdfB: File): Promise<ComparisonResult> => {
   const formData = new FormData();
@@ -27,4 +27,21 @@ export const exportReport = async (result: ComparisonResult) => {
   a.download = 'comparison_report.pdf';
   a.click();
   window.URL.revokeObjectURL(url);
+};
+
+export const compareSections = async (file1: File, file2: File): Promise<SectionComparisonResult> => {
+  const formData = new FormData();
+  formData.append('file1', file1);
+  formData.append('file2', file2);
+
+  const response = await fetch('http://localhost:5000/compare-sections', {
+    method: 'POST',
+    body: formData,
+  });
+
+  if (!response.ok) {
+    throw new Error('Failed to compare sections');
+  }
+
+  return response.json();
 };

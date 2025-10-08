@@ -1,9 +1,8 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { compareDocuments, exportReport } from './utils/api';
-import { ComparisonResult } from './utils/types';
-import SegmentBySideView from './components/SegmentBySideView';
-import PdfSectionViewer from './components/PdfSectionViewer';
+import { exportReport, compareSections } from './utils/api';
+import { ComparisonResult, SectionComparisonResult } from './utils/types';
+import SectionChunkView from './components/SectionChunkView';
 import './index.css';
 
 interface Message {
@@ -18,7 +17,7 @@ function App() {
     {
       id: '1',
       type: 'bot',
-      content: "Welcome to the Document Comparison System. Upload two PDF documents and I'll analyze their differences with intelligent insights powered by Azure OpenAI.",
+      content: "Welcome to the Document Comparison System. Upload two PDF documents to analyze their differences with intelligent insights.",
       timestamp: new Date()
     }
   ]);
@@ -28,8 +27,9 @@ function App() {
   });
   const [isLoading, setIsLoading] = useState(false);
   const [dragOver, setDragOver] = useState(false);
-  const [viewMode, setViewMode] = useState<'chat' | 'sidebyside' | 'pdfsections'>('chat');
-  const [currentResult, setCurrentResult] = useState<ComparisonResult | null>(null);
+  const [viewMode, setViewMode] = useState<'chat' | 'sections'>('chat');
+
+  const [sectionResult, setSectionResult] = useState<SectionComparisonResult | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const file1InputRef = useRef<HTMLInputElement>(null);
   const file2InputRef = useRef<HTMLInputElement>(null);
@@ -94,75 +94,67 @@ function App() {
     if (!files.file1 || !files.file2) return;
 
     setIsLoading(true);
-    addMessage('user', '🔍 Compare these documents');
+    addMessage('user', 'Compare these documents');
     
     setTimeout(() => {
-      addMessage('bot', 'Analyzing your documents... This may take a moment.');
+      addMessage('bot', 'Analyzing your documents with AI-powered section comparison. This may take a moment.');
     }, 500);
 
     try {
-      const result = await compareDocuments(files.file1, files.file2);
-      console.log('Comparison result:', result);
-      setCurrentResult(result);
+      const result = await compareSections(files.file1, files.file2);
+      console.log('Section comparison result:', result);
+      setSectionResult(result);
       
       const resultComponent = (
         <div className="result-card">
           <div className="similarity-score">
             <div className={`score-circle ${
-              result.similarityScore > 0.8 ? 'score-high' : 
-              result.similarityScore > 0.5 ? 'score-medium' : 'score-low'
+              result.overallSimilarity > 0.8 ? 'score-high' : 
+              result.overallSimilarity > 0.5 ? 'score-medium' : 'score-low'
             }`}>
-              {Math.round(result.similarityScore * 100)}%
+              {Math.round(result.overallSimilarity * 100)}%
             </div>
             <div>
-              <h3>Similarity Score</h3>
-              <p>Documents are {Math.round(result.similarityScore * 100)}% similar</p>
+              <h3>Overall Similarity</h3>
+              <p>Documents are {Math.round(result.overallSimilarity * 100)}% similar</p>
             </div>
           </div>
           
-          {result.aiInsights && (
+          {result.aiSectionInsights && (
             <div className="ai-summary">
-              <h4>AI Insights</h4>
-              <p><strong>Summary:</strong> {result.aiInsights.summary}</p>
-              <p><strong>Impact:</strong> {result.aiInsights.impact}</p>
+              <h4>AI Analysis Summary</h4>
+              <p>{result.aiSectionInsights.overallSummary}</p>
             </div>
           )}
           
           <div className="diff-section">
-            <h4>Key Differences ({result.diffSegments.length} changes found)</h4>
-            {result.diffSegments.slice(0, 5).map((diff: any, index: number) => {
-              console.log('Diff segment:', diff);
-              const typeStr = typeof diff.type === 'string' ? diff.type : 
-                             typeof diff.type === 'number' ? ['Unchanged', 'Inserted', 'Deleted', 'Modified'][diff.type] || 'Unknown' :
-                             String(diff.type);
-              return (
-                <div key={index} className={`diff-item diff-${typeStr.toLowerCase()}`}>
-                  <strong>{typeStr}:</strong> {diff.text.substring(0, 100)}
-                  {diff.text.length > 100 && '...'}
-                </div>
-              );
-            })}
-            {result.diffSegments.length > 5 && (
-              <p>... and {result.diffSegments.length - 5} more differences</p>
-            )}
+            <h4>Section Analysis ({result.sectionComparisons.length} sections compared)</h4>
+            <div className="section-stats">
+              <div className="stat-item">
+                <strong>{result.aiSectionInsights.changeStatistics.addedSections}</strong> Added Sections
+              </div>
+              <div className="stat-item">
+                <strong>{result.aiSectionInsights.changeStatistics.deletedSections}</strong> Removed Sections
+              </div>
+              <div className="stat-item">
+                <strong>{result.aiSectionInsights.changeStatistics.modifiedSections}</strong> Modified Sections
+              </div>
+              <div className="stat-item">
+                <strong>{result.aiSectionInsights.changeStatistics.unchangedSections}</strong> Unchanged Sections
+              </div>
+            </div>
           </div>
           
           <div className="action-buttons">
             <button 
               className="view-btn"
-              onClick={() => setViewMode('sidebyside')}
+              onClick={() => setViewMode('sections')}
             >
-              📋 Segment-by-Segment View
-            </button>
-            <button 
-              className="view-btn"
-              onClick={() => setViewMode('pdfsections')}
-            >
-              📄 PDF Section View
+              � Section-by-Section View
             </button>
             <button 
               className="export-btn"
-              onClick={() => handleExport(result)}
+              onClick={() => handleSectionExport(result)}
             >
               📥 Export Report
             </button>
@@ -177,19 +169,31 @@ function App() {
     } catch (error) {
       console.error('Comparison error:', error);
       setTimeout(() => {
-        addMessage('bot', `❌ Sorry, there was an error comparing your documents: ${error instanceof Error ? error.message : 'Unknown error'}. Please make sure both files are valid PDFs and try again.`);
+        addMessage('bot', `Error: There was an issue comparing your documents: ${error instanceof Error ? error.message : 'Unknown error'}. Please ensure both files are valid PDFs and try again.`);
       }, 1000);
     } finally {
       setIsLoading(false);
     }
   };
 
-  const handleExport = async (result: ComparisonResult) => {
+  const handleSectionExport = async (result: SectionComparisonResult) => {
     try {
-      await exportReport(result);
-      addMessage('bot', '📥 Report exported successfully! Check your downloads folder.');
+      // Convert SectionComparisonResult to ComparisonResult for export
+      const exportResult: ComparisonResult = {
+        summary: result.aiSectionInsights.overallSummary,
+        similarityScore: result.overallSimilarity,
+        diffSegments: [], // Empty for now as we're using section-based comparison
+        aiInsights: {
+          summary: result.aiSectionInsights.overallSummary,
+          keyChanges: result.aiSectionInsights.keyChanges.map(change => change.aiSummary),
+          recommendations: [],
+          impact: 'See section-by-section analysis for detailed impact assessment'
+        }
+      };
+      await exportReport(exportResult);
+      addMessage('bot', 'Report exported successfully. Check your downloads folder.');
     } catch (error) {
-      addMessage('bot', '❌ Failed to export report. Please try again.');
+      addMessage('bot', 'Failed to export report. Please try again.');
     }
   };
 
@@ -222,27 +226,15 @@ function App() {
     </motion.div>
   );
 
-  // Transform diffSegments for SegmentBySideView component
-  const transformSegments = (result: ComparisonResult) => {
-    return result.diffSegments.map(segment => ({
-      type: segment.type === 'Inserted' ? 'added' as const : 
-            segment.type === 'Deleted' ? 'removed' as const : 
-            segment.type === 'Modified' ? 'modified' as const : 'unchanged' as const,
-      text: segment.text,
-      pageA: segment.pageNumberA,
-      pageB: segment.pageNumberB,
-      severity: segment.severity === 'Minor' ? 'Low' as const : 
-               segment.severity === 'Moderate' ? 'Medium' as const : 'High' as const
-    }));
-  };
 
-  if (viewMode === 'sidebyside' && currentResult) {
+
+  if (viewMode === 'sections' && sectionResult) {
     return (
       <div className="app">
         <div className="header">
           <h1>Document Comparison System</h1>
           <div className="view-mode-toggle">
-            <p>Professional PDF document analysis with AI insights</p>
+            <p>AI-powered section-by-section document analysis</p>
             <button 
               className="back-btn toggle-button"
               onClick={() => setViewMode('chat')}
@@ -252,36 +244,12 @@ function App() {
           </div>
         </div>
         <div className="main-content">
-          <SegmentBySideView 
-            segments={transformSegments(currentResult)}
-            aiInsights={currentResult.aiInsights}
-            isLoading={false}
-          />
-        </div>
-      </div>
-    );
-  }
-
-  if (viewMode === 'pdfsections' && currentResult && files.file1 && files.file2) {
-    return (
-      <div className="app">
-        <div className="header">
-          <h1>Document Comparison System</h1>
-          <div className="view-mode-toggle">
-            <p>Visual PDF comparison with section highlighting</p>
-            <button 
-              className="back-btn toggle-button"
-              onClick={() => setViewMode('chat')}
-            >
-              ← Back to Overview
-            </button>
-          </div>
-        </div>
-        <div className="main-content">
-          <PdfSectionViewer 
-            documentA={files.file1}
-            documentB={files.file2}
-            comparisonResult={currentResult}
+          <SectionChunkView 
+            sectionComparisons={sectionResult.sectionComparisons}
+            aiInsights={sectionResult.aiSectionInsights}
+            documentAName={sectionResult.documentAName}
+            documentBName={sectionResult.documentBName}
+            overallSimilarity={sectionResult.overallSimilarity}
             isLoading={false}
           />
         </div>

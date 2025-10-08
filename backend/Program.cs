@@ -41,6 +41,7 @@ builder.Services.AddSingleton<IDiffService, DiffService>();
 builder.Services.AddSingleton<ISeverityClassifier, LocalSeverityClassifier>();
 builder.Services.AddSingleton<IOpenAiService, OpenAiService>();
 builder.Services.AddScoped<IReportService, ReportService>();
+builder.Services.AddScoped<ISectionComparisonService, SectionComparisonService>();
 
 // Increase limits for large files if running locally (adjust as needed for production)
 builder.Services.Configure<FormOptions>(o =>
@@ -151,6 +152,34 @@ app.MapPost("/extract-sections", async (IFormFileCollection files, EnhancedPdfSe
     {
         app.Logger.LogError(ex, "Error extracting PDF sections");
         return Results.Problem("Error processing PDF files.");
+    }
+});
+
+app.MapPost("/compare-sections", async (HttpRequest request, ISectionComparisonService sectionComparisonService) =>
+{
+    try
+    {
+        var form = await request.ReadFormAsync();
+        var file1 = form.Files["file1"];
+        var file2 = form.Files["file2"];
+
+        if (file1 == null || file2 == null)
+        {
+            return Results.BadRequest("Both file1 and file2 are required.");
+        }
+
+        if (!FileHelpers.IsPdf(file1) || !FileHelpers.IsPdf(file2))
+        {
+            return Results.BadRequest("Both files must be PDF documents.");
+        }
+
+        var result = await sectionComparisonService.CompareDocumentSectionsAsync(file1, file2);
+        return Results.Ok(result);
+    }
+    catch (Exception ex)
+    {
+        app.Logger.LogError(ex, "Error comparing document sections");
+        return Results.Problem("Error processing document comparison.");
     }
 });
 

@@ -30,4 +30,9 @@ public interface IOpenAiService
     /// Generate detailed report content for export
     /// </summary>
     string GenerateDetailedReport(string context);
+
+    /// <summary>
+    /// Generate a simple AI summary from a prompt
+    /// </summary>
+    Task<string> GenerateSimpleSummaryAsync(string prompt, CancellationToken cancellationToken = default);
 }

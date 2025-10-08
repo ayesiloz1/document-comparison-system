@@ -249,5 +249,37 @@ TECHNICAL ANALYSIS:
 Advanced comparison algorithms utilized for precise change detection and classification. All modifications processed through severity assessment protocols.
 ";
         }
+
+        public async Task<string> GenerateSimpleSummaryAsync(string prompt, CancellationToken cancellationToken = default)
+        {
+            if (!_isConfigured || _client == null || _deploymentName == null)
+            {
+                return "AI summary unavailable - service not configured";
+            }
+
+            try
+            {
+                var chatClient = _client.GetChatClient(_deploymentName);
+                
+                var messages = new ChatMessage[]
+                {
+                    new SystemChatMessage("You are a helpful document analysis assistant. Provide concise, professional summaries."),
+                    new UserChatMessage(prompt)
+                };
+
+                var options = new ChatCompletionOptions
+                {
+                    MaxOutputTokenCount = 150,
+                    Temperature = 0.3f
+                };
+
+                var response = await chatClient.CompleteChatAsync(messages, options, cancellationToken);
+                return response.Value.Content[0].Text ?? "AI summary unavailable";
+            }
+            catch
+            {
+                return "AI summary unavailable - manual review recommended";
+            }
+        }
     }
 }
