@@ -73,8 +73,23 @@ cd frontend
 npm install
 ```
 
-### 4. Configuration
-Create an `appsettings.json` file in the backend directory:
+### 4. Environment Configuration
+
+**Important**: Never commit your actual API keys to version control.
+
+1. Copy the environment template:
+```bash
+cp .env.example .env
+```
+
+2. Edit the `.env` file with your actual Azure OpenAI credentials:
+```
+AzureOpenAI__Endpoint=https://your-resource-name.openai.azure.com/
+AzureOpenAI__ApiKey=your-actual-api-key-here
+AzureOpenAI__DeploymentName=gpt-4
+```
+
+Alternatively, you can set these as system environment variables or update `appsettings.json` (but never commit real keys):
 
 ```json
 {
