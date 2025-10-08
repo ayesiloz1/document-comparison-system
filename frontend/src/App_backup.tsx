@@ -3,7 +3,6 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { compareDocuments, exportReport } from './utils/api';
 import { ComparisonResult } from './utils/types';
 import SegmentBySideView from './components/SegmentBySideView';
-import PdfSectionViewer from './components/PdfSectionViewer';
 import './index.css';
 
 interface Message {
@@ -28,7 +27,7 @@ function App() {
   });
   const [isLoading, setIsLoading] = useState(false);
   const [dragOver, setDragOver] = useState(false);
-  const [viewMode, setViewMode] = useState<'chat' | 'sidebyside' | 'pdfsections'>('chat');
+  const [viewMode, setViewMode] = useState<'chat' | 'sidebyside'>('chat');
   const [currentResult, setCurrentResult] = useState<ComparisonResult | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const file1InputRef = useRef<HTMLInputElement>(null);
@@ -152,13 +151,7 @@ function App() {
               className="view-btn"
               onClick={() => setViewMode('sidebyside')}
             >
-              📋 Segment-by-Segment View
-            </button>
-            <button 
-              className="view-btn"
-              onClick={() => setViewMode('pdfsections')}
-            >
-              📄 PDF Section View
+              � Segment-by-Segment View
             </button>
             <button 
               className="export-btn"
@@ -255,33 +248,6 @@ function App() {
           <SegmentBySideView 
             segments={transformSegments(currentResult)}
             aiInsights={currentResult.aiInsights}
-            isLoading={false}
-          />
-        </div>
-      </div>
-    );
-  }
-
-  if (viewMode === 'pdfsections' && currentResult && files.file1 && files.file2) {
-    return (
-      <div className="app">
-        <div className="header">
-          <h1>Document Comparison System</h1>
-          <div className="view-mode-toggle">
-            <p>Visual PDF comparison with section highlighting</p>
-            <button 
-              className="back-btn toggle-button"
-              onClick={() => setViewMode('chat')}
-            >
-              ← Back to Overview
-            </button>
-          </div>
-        </div>
-        <div className="main-content">
-          <PdfSectionViewer 
-            documentA={files.file1}
-            documentB={files.file2}
-            comparisonResult={currentResult}
             isLoading={false}
           />
         </div>

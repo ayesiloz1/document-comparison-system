@@ -36,10 +36,11 @@ builder.Services.Configure<OpenAiOptions>(builder.Configuration.GetSection("Azur
 
 // Register services
 builder.Services.AddSingleton<IPdfService, PdfService>();
+builder.Services.AddSingleton<EnhancedPdfService>();
 builder.Services.AddSingleton<IDiffService, DiffService>();
 builder.Services.AddSingleton<ISeverityClassifier, LocalSeverityClassifier>();
 builder.Services.AddSingleton<IOpenAiService, OpenAiService>();
-builder.Services.AddSingleton<IReportService, ReportService>();
+builder.Services.AddScoped<IReportService, ReportService>();
 
 // Increase limits for large files if running locally (adjust as needed for production)
 builder.Services.Configure<FormOptions>(o =>
@@ -119,6 +120,38 @@ app.MapPost("/export", async (ComparisonResult result, IReportService reportServ
 {
     var bytes = reportService.GeneratePdfReport(result);
     return Results.File(bytes, "application/pdf", "comparison_report.pdf");
+});
+
+app.MapPost("/extract-sections", async (IFormFileCollection files, EnhancedPdfService enhancedPdfService) =>
+{
+    if (files.Count != 2)
+        return Results.BadRequest("Please upload exactly two PDF files.");
+
+    var file1 = files[0];
+    var file2 = files[1];
+
+    if (!FileHelpers.IsPdf(file1) || !FileHelpers.IsPdf(file2))
+        return Results.BadRequest("Both files must be PDFs.");
+
+    try
+    {
+        using var stream1 = file1.OpenReadStream();
+        using var stream2 = file2.OpenReadStream();
+
+        var documentA = await enhancedPdfService.ExtractWithCoordinatesAsync(stream1, file1.FileName);
+        var documentB = await enhancedPdfService.ExtractWithCoordinatesAsync(stream2, file2.FileName);
+
+        return Results.Ok(new
+        {
+            DocumentA = documentA,
+            DocumentB = documentB
+        });
+    }
+    catch (Exception ex)
+    {
+        app.Logger.LogError(ex, "Error extracting PDF sections");
+        return Results.Problem("Error processing PDF files.");
+    }
 });
 
 app.Run();

@@ -25,4 +25,9 @@ public interface IOpenAiService
     /// Generate comprehensive AI insights about document changes
     /// </summary>
     Task<AIInsight> GenerateInsightsAsync(string oldText, string newText, List<DiffSegment> diffSegments, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Generate detailed report content for export
+    /// </summary>
+    string GenerateDetailedReport(string context);
 }

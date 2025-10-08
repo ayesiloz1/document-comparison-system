@@ -39,3 +39,20 @@ public static class LocalSimilarityEstimator
         return tokens;
     }
 }
+
+public static class FileHelpers
+{
+    public static bool IsPdf(IFormFile file)
+    {
+        if (file == null || file.Length == 0)
+            return false;
+            
+        // Check file extension
+        var extension = Path.GetExtension(file.FileName).ToLowerInvariant();
+        if (extension != ".pdf")
+            return false;
+            
+        // Check content type
+        return file.ContentType == "application/pdf";
+    }
+}
