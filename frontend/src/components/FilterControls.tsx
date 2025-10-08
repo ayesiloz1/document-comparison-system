@@ -7,13 +7,13 @@ interface Props {
 
 const FilterControls: React.FC<Props> = ({ filter, setFilter }) => {
   return (
-    <div style={{ margin: '10px 0' }}>
+    <div className="filter-controls">
       <label>Show: </label>
       {['All', 'Minor', 'Moderate', 'Major'].map(f => (
         <button
           key={f}
           onClick={() => setFilter(f)}
-          style={{ fontWeight: filter === f ? 'bold' : 'normal', margin: '0 5px' }}
+          className={`filter-button ${filter === f ? 'active' : 'inactive'}`}
         >
           {f}
         </button>

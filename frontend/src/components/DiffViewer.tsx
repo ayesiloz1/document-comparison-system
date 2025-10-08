@@ -20,63 +20,35 @@ const DiffViewer: React.FC<Props> = ({ diffSegments, filter = 'All' }) => {
     }
   };
 
-  const getTypeColor = (type: string) => {
-    switch (type) {
-      case 'Inserted': return '#dcfce7';
-      case 'Deleted': return '#fee2e2';
-      case 'Modified': return '#fef3c7';
-      default: return '#f8fafc';
-    }
-  };
+
 
   return (
-    <div style={{ margin: '20px 0' }}>
+    <div className="diff-viewer">
       <h4>Document Differences ({filtered.length} items)</h4>
-      <div style={{ maxHeight: '400px', overflowY: 'auto', border: '1px solid #e5e7eb', borderRadius: '8px' }}>
+      <div className="diff-viewer-container">
         {filtered.length === 0 ? (
-          <div style={{ padding: '20px', textAlign: 'center', color: '#6b7280' }}>
+          <div className="diff-empty">
             No differences found for the selected filter.
           </div>
         ) : (
           filtered.map((segment, index) => (
             <div
               key={index}
-              style={{
-                padding: '12px 16px',
-                borderBottom: index < filtered.length - 1 ? '1px solid #f3f4f6' : 'none',
-                backgroundColor: getTypeColor(segment.type),
-                display: 'flex',
-                alignItems: 'flex-start',
-                gap: '12px'
-              }}
+              className={`diff-segment ${segment.type.toLowerCase()}`}
             >
-              <span style={{ fontSize: '16px', flexShrink: 0 }}>
+              <span className="diff-icon">
                 {getTypeIcon(segment.type)}
               </span>
-              <div style={{ flex: 1 }}>
-                <div style={{ 
-                  display: 'flex', 
-                  alignItems: 'center', 
-                  gap: '8px', 
-                  marginBottom: '4px',
-                  fontSize: '12px',
-                  color: '#6b7280'
-                }}>
-                  <span style={{ 
-                    fontWeight: 'bold',
-                    color: segment.type === 'Inserted' ? '#059669' : 
-                           segment.type === 'Deleted' ? '#dc2626' : 
-                           segment.type === 'Modified' ? '#d97706' : '#374151'
-                  }}>
+              <div className="diff-content">
+                <div className="diff-meta">
+                  <span className={`diff-type ${segment.type.toLowerCase()}`}>
                     {segment.type.toUpperCase()}
                   </span>
                   <span>•</span>
-                  <span style={{
-                    backgroundColor: severityColors[segment.severity],
-                    padding: '2px 6px',
-                    borderRadius: '4px',
-                    fontWeight: '500'
-                  }}>
+                  <span 
+                    className="diff-severity-badge"
+                    style={{ backgroundColor: severityColors[segment.severity] }}
+                  >
                     {segment.severity}
                   </span>
                   {segment.pageNumberA && (
@@ -86,14 +58,7 @@ const DiffViewer: React.FC<Props> = ({ diffSegments, filter = 'All' }) => {
                     </>
                   )}
                 </div>
-                <div style={{
-                  fontFamily: 'Monaco, Menlo, monospace',
-                  fontSize: '13px',
-                  lineHeight: '1.4',
-                  color: '#374151',
-                  whiteSpace: 'pre-wrap',
-                  wordBreak: 'break-word'
-                }}>
+                <div className="diff-text">
                   {segment.text.length > 200 
                     ? `${segment.text.substring(0, 200)}...` 
                     : segment.text

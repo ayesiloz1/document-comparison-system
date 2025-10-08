@@ -56,7 +56,7 @@ function App() {
       ...prev,
       [`file${fileNumber}`]: file
     }));
-    addMessage('user', `📄 Uploaded: ${file.name}`);
+    addMessage('user', `Uploaded: ${file.name}`);
     
     if (fileNumber === 1 && !files.file2) {
       setTimeout(() => {
@@ -68,7 +68,7 @@ function App() {
       }, 500);
     } else if ((fileNumber === 1 && files.file2) || (fileNumber === 2 && files.file1)) {
       setTimeout(() => {
-        addMessage('bot', '🎉 Both documents uploaded! Click "Compare Documents" to start the analysis.');
+        addMessage('bot', 'Both documents uploaded! Click "Compare Documents" to start the analysis.');
       }, 500);
     }
   };
@@ -119,16 +119,9 @@ function App() {
             </div>
           </div>
           
-          {result.summary && (
-            <div>
-              <h4>Summary</h4>
-              <p>{result.summary}</p>
-            </div>
-          )}
-          
           {result.aiInsights && (
             <div className="ai-summary">
-              <h4>🧠 AI Insights</h4>
+              <h4>AI Insights</h4>
               <p><strong>Summary:</strong> {result.aiInsights.summary}</p>
               <p><strong>Impact:</strong> {result.aiInsights.impact}</p>
             </div>
@@ -241,25 +234,17 @@ function App() {
       <div className="app">
         <div className="header">
           <h1>Document Comparison System</h1>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '20px' }}>
+          <div className="view-mode-toggle">
             <p>Professional PDF document analysis with AI insights</p>
             <button 
-              className="back-btn"
+              className="back-btn toggle-button"
               onClick={() => setViewMode('chat')}
-              style={{
-                background: 'rgba(255,255,255,0.2)',
-                border: 'none',
-                color: 'white',
-                padding: '8px 16px',
-                borderRadius: '6px',
-                cursor: 'pointer'
-              }}
             >
               ← Back to Overview
             </button>
           </div>
         </div>
-        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', height: 'calc(100vh - 120px)' }}>
+        <div className="main-content">
           <SegmentBySideView 
             segments={transformSegments(currentResult)}
             aiInsights={currentResult.aiInsights}
@@ -317,7 +302,7 @@ function App() {
               else if (!files.file2) file2InputRef.current?.click();
             }}
           >
-            <div style={{ fontSize: '24px', marginBottom: '8px' }}>📄</div>
+            <div className="upload-icon">📄</div>
             <p>
               {!files.file1 && !files.file2 
                 ? 'Drop your first PDF here or click to browse'
@@ -349,16 +334,16 @@ function App() {
             <div className="uploaded-files">
               {files.file1 && (
                 <div className="file-item">
-                  <span style={{ fontSize: '16px' }}>📄</span>
+                  <span className="file-icon">📄</span>
                   <span>{files.file1.name}</span>
-                  <span className="remove-btn" onClick={() => removeFile(1)} style={{ fontSize: '16px', cursor: 'pointer' }}>❌</span>
+                  <span className="remove-btn remove-file-btn" onClick={() => removeFile(1)}>❌</span>
                 </div>
               )}
               {files.file2 && (
                 <div className="file-item">
-                  <span style={{ fontSize: '16px' }}>📄</span>
+                  <span className="file-icon">📄</span>
                   <span>{files.file2.name}</span>
-                  <span className="remove-btn" onClick={() => removeFile(2)} style={{ fontSize: '16px', cursor: 'pointer' }}>❌</span>
+                  <span className="remove-btn remove-file-btn" onClick={() => removeFile(2)}>❌</span>
                 </div>
               )}
             </div>
