@@ -4,6 +4,10 @@ using DocumentComparer.Utils;
 using Microsoft.AspNetCore.Http.Features;
 using Microsoft.Extensions.Options;
 using QuestPDF.Infrastructure;
+using DotNetEnv;
+
+// Load environment variables from .env file
+Env.Load();
 
 // Configure QuestPDF license
 QuestPDF.Settings.License = LicenseType.Community;
