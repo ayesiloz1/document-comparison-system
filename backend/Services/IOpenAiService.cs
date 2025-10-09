@@ -35,4 +35,9 @@ public interface IOpenAiService
     /// Generate a simple AI summary from a prompt
     /// </summary>
     Task<string> GenerateSimpleSummaryAsync(string prompt, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Generate a fast, brief AI summary for performance optimization
+    /// </summary>
+    Task<string> GenerateFastSummaryAsync(string prompt, CancellationToken cancellationToken = default);
 }

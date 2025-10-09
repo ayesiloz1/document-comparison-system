@@ -263,13 +263,20 @@ Advanced comparison algorithms utilized for precise change detection and classif
                 
                 var messages = new ChatMessage[]
                 {
-                    new SystemChatMessage("You are a helpful document analysis assistant. Provide concise, professional summaries."),
+                    new SystemChatMessage(@"You are a professional document analysis expert. Provide detailed, comprehensive analysis with the following characteristics:
+- Use 3-5 sentences minimum for each analysis
+- Include specific details about changes, additions, or deletions
+- Explain the business impact or significance of changes
+- Use professional, analytical language
+- Identify key terminology, concepts, and structural changes
+- Provide context about why changes might have been made
+- Be thorough and informative while remaining clear and organized"),
                     new UserChatMessage(prompt)
                 };
 
                 var options = new ChatCompletionOptions
                 {
-                    MaxOutputTokenCount = 150,
+                    MaxOutputTokenCount = 500, // Increased from 150 to 500 for more detailed responses
                     Temperature = 0.3f
                 };
 
@@ -279,6 +286,38 @@ Advanced comparison algorithms utilized for precise change detection and classif
             catch
             {
                 return "AI summary unavailable - manual review recommended";
+            }
+        }
+
+        public async Task<string> GenerateFastSummaryAsync(string prompt, CancellationToken cancellationToken = default)
+        {
+            if (!_isConfigured || _client == null || _deploymentName == null)
+            {
+                return "AI summary unavailable";
+            }
+
+            try
+            {
+                var chatClient = _client.GetChatClient(_deploymentName);
+                
+                var messages = new ChatMessage[]
+                {
+                    new SystemChatMessage("You are a document analysis assistant. Provide brief, concise summaries in 1-2 sentences maximum. Be direct and factual."),
+                    new UserChatMessage(prompt)
+                };
+
+                var options = new ChatCompletionOptions
+                {
+                    MaxOutputTokenCount = 100, // Much shorter for speed
+                    Temperature = 0.1f // Lower temperature for faster, more predictable responses
+                };
+
+                var response = await chatClient.CompleteChatAsync(messages, options, cancellationToken);
+                return response.Value.Content[0].Text ?? "AI summary unavailable";
+            }
+            catch
+            {
+                return "AI analysis unavailable";
             }
         }
     }

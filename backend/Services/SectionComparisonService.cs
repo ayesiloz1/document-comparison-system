@@ -1,5 +1,6 @@
 using DocumentComparer.Models;
 using DocumentComparer.Services;
+using DocumentComparer.Utils;
 using iText.Kernel.Pdf;
 using iText.Kernel.Pdf.Canvas.Parser;
 using iText.Kernel.Pdf.Canvas.Parser.Listener;
@@ -79,7 +80,7 @@ public class SectionComparisonService : ISectionComparisonService
             }
             
             // Fix ligature issues in extracted text
-            pageText = FixLigatureIssues(pageText);
+            pageText = TextNormalizer.NormalizeLigatures(pageText);
 
             // Extract sections from this page
             var pageSections = ExtractSectionsFromPageText(pageText, pageNum, documentName);
@@ -120,7 +121,7 @@ public class SectionComparisonService : ISectionComparisonService
                 currentSection = new DocumentSection
                 {
                     SectionId = Guid.NewGuid().ToString(),
-                    Title = line,
+                    Title = TextNormalizer.NormalizeSectionTitle(line),
                     SectionType = DetermineSectionType(line),
                     PageNumber = pageNumber,
                     DocumentName = documentName,
@@ -213,7 +214,7 @@ public class SectionComparisonService : ISectionComparisonService
 
     private async Task<List<SectionComparison>> CompareSectionsAsync(List<DocumentSection> sectionsA, List<DocumentSection> sectionsB)
     {
-        var comparisons = new List<SectionComparison>();
+        var comparisonTasks = new List<Task<SectionComparison>>();
         
         // Create a mapping for better section matching
         var processedB = new HashSet<string>();
@@ -225,24 +226,23 @@ public class SectionComparisonService : ISectionComparisonService
             if (bestMatch != null)
             {
                 processedB.Add(bestMatch.SectionId);
-                
-                var comparison = await CreateSectionComparison(sectionA, bestMatch, SectionChangeType.Modified);
-                comparisons.Add(comparison);
+                comparisonTasks.Add(CreateSectionComparisonAsync(sectionA, bestMatch, SectionChangeType.Modified));
             }
             else
             {
                 // Section was deleted
-                var comparison = await CreateSectionComparison(sectionA, null, SectionChangeType.Deleted);
-                comparisons.Add(comparison);
+                comparisonTasks.Add(CreateSectionComparisonAsync(sectionA, null, SectionChangeType.Deleted));
             }
         }
         
         // Handle sections that were added in document B
         foreach (var sectionB in sectionsB.Where(s => !processedB.Contains(s.SectionId)))
         {
-            var comparison = await CreateSectionComparison(null, sectionB, SectionChangeType.Added);
-            comparisons.Add(comparison);
+            comparisonTasks.Add(CreateSectionComparisonAsync(null, sectionB, SectionChangeType.Added));
         }
+        
+        // Execute all AI analysis in parallel with concurrency limit
+        var comparisons = await ExecuteWithConcurrencyLimit(comparisonTasks, maxConcurrency: 5);
         
         return comparisons.OrderBy(c => c.PageNumberA ?? c.PageNumberB ?? 0).ToList();
     }
@@ -279,7 +279,28 @@ public class SectionComparisonService : ISectionComparisonService
         return union == 0 ? 0 : (double)intersection / union;
     }
 
-    private async Task<SectionComparison> CreateSectionComparison(DocumentSection? sectionA, DocumentSection? sectionB, SectionChangeType changeType)
+    private async Task<List<T>> ExecuteWithConcurrencyLimit<T>(List<Task<T>> tasks, int maxConcurrency)
+    {
+        var results = new List<T>();
+        var semaphore = new SemaphoreSlim(maxConcurrency, maxConcurrency);
+        
+        var throttledTasks = tasks.Select(async task =>
+        {
+            await semaphore.WaitAsync();
+            try
+            {
+                return await task;
+            }
+            finally
+            {
+                semaphore.Release();
+            }
+        });
+        
+        return (await Task.WhenAll(throttledTasks)).ToList();
+    }
+
+    private async Task<SectionComparison> CreateSectionComparisonAsync(DocumentSection? sectionA, DocumentSection? sectionB, SectionChangeType changeType)
     {
         var comparison = new SectionComparison
         {
@@ -303,8 +324,8 @@ public class SectionComparisonService : ISectionComparisonService
             }
         }
         
-        // Generate AI summary for this comparison
-        comparison.AISummary = await GenerateSectionAISummary(comparison);
+        // Generate AI summary for this comparison (use fast mode for efficiency)
+        comparison.AISummary = await GenerateFastSectionAISummary(comparison);
         
         return comparison;
     }
@@ -315,10 +336,40 @@ public class SectionComparisonService : ISectionComparisonService
         {
             var prompt = comparison.ChangeType switch
             {
-                SectionChangeType.Added => $"Summarize this new section that was added:\n{comparison.SectionB?.Content}",
-                SectionChangeType.Deleted => $"Summarize this section that was removed:\n{comparison.SectionA?.Content}",
-                SectionChangeType.Modified => $"Summarize the changes between these sections:\nOriginal:\n{comparison.SectionA?.Content}\n\nNew:\n{comparison.SectionB?.Content}",
-                _ => $"This section remained unchanged: {comparison.SectionA?.Title}"
+                SectionChangeType.Added => $@"Analyze this newly added section in detail. Explain what it covers, its purpose, key requirements or features it introduces, and how it enhances the document's scope:
+
+SECTION TITLE: {comparison.SectionB?.Title}
+SECTION CONTENT:
+{comparison.SectionB?.Content}
+
+Provide a comprehensive analysis of this addition, including its business significance and what capabilities or requirements it introduces.",
+
+                SectionChangeType.Deleted => $@"Analyze this removed section in detail. Explain what functionality, requirements, or content was eliminated, why this might have been removed, and what impact this removal has on the overall document:
+
+REMOVED SECTION TITLE: {comparison.SectionA?.Title}
+REMOVED SECTION CONTENT:
+{comparison.SectionA?.Content}
+
+Provide a thorough analysis of what was lost and the potential implications of this removal.",
+
+                SectionChangeType.Modified => $@"Perform a detailed comparative analysis of these modified sections. Identify specific changes, additions, enhancements, and any removed elements. Explain the business rationale behind these changes and their significance:
+
+ORIGINAL VERSION:
+Title: {comparison.SectionA?.Title}
+Content: {comparison.SectionA?.Content}
+
+UPDATED VERSION:
+Title: {comparison.SectionB?.Title}
+Content: {comparison.SectionB?.Content}
+
+Provide a comprehensive analysis highlighting: 1) What specifically changed, 2) What was added or enhanced, 3) What was removed or simplified, 4) The likely business reasons for these changes, 5) The impact on requirements or functionality.",
+
+                _ => $@"Analyze this unchanged section and explain its continued relevance and importance to the document:
+
+SECTION: {comparison.SectionA?.Title}
+CONTENT: {comparison.SectionA?.Content}
+
+Explain why this section remained stable and its ongoing significance."
             };
             
             return await _openAiService.GenerateSimpleSummaryAsync(prompt);
@@ -327,12 +378,55 @@ public class SectionComparisonService : ISectionComparisonService
         {
             return comparison.ChangeType switch
             {
-                SectionChangeType.Added => "New section added",
-                SectionChangeType.Deleted => "Section removed",
-                SectionChangeType.Modified => "Section modified",
-                _ => "Section unchanged"
+                SectionChangeType.Added => "New section added - detailed analysis unavailable",
+                SectionChangeType.Deleted => "Section removed - detailed analysis unavailable", 
+                SectionChangeType.Modified => "Section modified - detailed analysis unavailable",
+                _ => "Section unchanged - detailed analysis unavailable"
             };
         }
+    }
+
+    private async Task<string> GenerateFastSectionAISummary(SectionComparison comparison)
+    {
+        try
+        {
+            var prompt = comparison.ChangeType switch
+            {
+                SectionChangeType.Added => $"Briefly summarize this new section: {comparison.SectionB?.Title ?? "Untitled"}\nContent: {TruncateContent(comparison.SectionB?.Content, 200)}",
+                SectionChangeType.Deleted => $"Briefly summarize this removed section: {comparison.SectionA?.Title ?? "Untitled"}\nContent: {TruncateContent(comparison.SectionA?.Content, 200)}",
+                SectionChangeType.Modified => $"Briefly describe changes in '{comparison.SectionA?.Title ?? "Section"}': Original had {comparison.SectionA?.Content?.Length ?? 0} chars, new has {comparison.SectionB?.Content?.Length ?? 0} chars. Key changes: {GetKeyChangesHint(comparison)}",
+                _ => $"Section '{comparison.SectionA?.Title ?? "Untitled"}' remained unchanged."
+            };
+            
+            return await _openAiService.GenerateFastSummaryAsync(prompt);
+        }
+        catch
+        {
+            return comparison.ChangeType switch
+            {
+                SectionChangeType.Added => $"New section added: {comparison.SectionB?.Title ?? "Untitled"}",
+                SectionChangeType.Deleted => $"Section removed: {comparison.SectionA?.Title ?? "Untitled"}",
+                SectionChangeType.Modified => $"Section modified: {comparison.SectionA?.Title ?? "Untitled"}",
+                _ => $"Section unchanged: {comparison.SectionA?.Title ?? "Untitled"}"
+            };
+        }
+    }
+
+    private string TruncateContent(string? content, int maxLength)
+    {
+        if (string.IsNullOrEmpty(content)) return "No content";
+        return content.Length <= maxLength ? content : content.Substring(0, maxLength) + "...";
+    }
+
+    private string GetKeyChangesHint(SectionComparison comparison)
+    {
+        var oldLength = comparison.SectionA?.Content?.Length ?? 0;
+        var newLength = comparison.SectionB?.Content?.Length ?? 0;
+        
+        if (newLength > oldLength * 1.5) return "significant expansion";
+        if (newLength < oldLength * 0.5) return "significant reduction";
+        if (Math.Abs(newLength - oldLength) < 50) return "minor text changes";
+        return "moderate changes";
     }
 
     private double CalculateOverallSimilarity(List<SectionComparison> comparisons)
@@ -341,13 +435,22 @@ public class SectionComparisonService : ISectionComparisonService
         
         var totalSections = comparisons.Count;
         var unchangedSections = comparisons.Count(c => c.ChangeType == SectionChangeType.Unchanged);
-        var modifiedSections = comparisons.Where(c => c.ChangeType == SectionChangeType.Modified);
+        var modifiedSections = comparisons.Where(c => c.ChangeType == SectionChangeType.Modified).ToList();
         
         var baseScore = (double)unchangedSections / totalSections;
-        var modifiedScore = modifiedSections.Average(c => c.SimilarityScore ?? 0);
         
-        return (baseScore + modifiedScore * modifiedSections.Count() / totalSections) / 
-               (1 + modifiedSections.Count() / (double)totalSections);
+        // Handle case where there are no modified sections
+        var modifiedScore = modifiedSections.Any() 
+            ? modifiedSections.Average(c => c.SimilarityScore ?? 0) 
+            : 0;
+        
+        if (!modifiedSections.Any())
+        {
+            return baseScore; // If no modified sections, return just the base score
+        }
+        
+        return (baseScore + modifiedScore * modifiedSections.Count / totalSections) / 
+               (1 + modifiedSections.Count / (double)totalSections);
     }
 
     private async Task<AISectionInsights> GenerateAISectionInsightsAsync(List<SectionComparison> comparisons)
@@ -358,9 +461,13 @@ public class SectionComparisonService : ISectionComparisonService
             var deletedCount = comparisons.Count(c => c.ChangeType == SectionChangeType.Deleted);
             var modifiedCount = comparisons.Count(c => c.ChangeType == SectionChangeType.Modified);
             
-            var overallSummary = await _openAiService.GenerateSimpleSummaryAsync(
-                $"Analyze this document comparison: {addedCount} sections added, {deletedCount} sections deleted, " +
-                $"{modifiedCount} sections modified. Provide a brief executive summary.");
+            var totalSections = comparisons.Count;
+            var changedSections = addedCount + deletedCount + modifiedCount;
+            var changePercentage = totalSections > 0 ? (double)changedSections / totalSections * 100 : 0;
+            
+            var overallSummary = await _openAiService.GenerateFastSummaryAsync(
+                $@"Document comparison: {addedCount} added, {deletedCount} deleted, {modifiedCount} modified sections out of {totalSections} total ({changePercentage:F0}% changed). " +
+                $"Assess if this is a {(changePercentage > 70 ? "major overhaul" : changePercentage > 30 ? "significant update" : "minor revision")} and provide brief business impact analysis.");
             
             return new AISectionInsights
             {
@@ -392,37 +499,5 @@ public class SectionComparisonService : ISectionComparisonService
         }
     }
 
-    private static string FixLigatureIssues(string text)
-    {
-        if (string.IsNullOrEmpty(text))
-            return text;
 
-        // Common ligature replacements
-        var ligatureReplacements = new Dictionary<string, string>
-        {
-            // Unicode ligatures that might appear as empty boxes
-            { "\uFB01", "fi" },  // ﬁ ligature
-            { "\uFB02", "fl" },  // ﬂ ligature
-            { "\uFB03", "ffi" }, // ﬃ ligature
-            { "\uFB04", "ffl" }, // ﬄ ligature
-            { "\uFB00", "ff" },  // ﬀ ligature
-            { "\uFB05", "ft" },  // ﬅ ligature
-            { "\uFB06", "st" },  // ﬆ ligature
-            
-            // Handle empty boxes or replacement characters
-            { "\uFFFD", "" },   // Unicode replacement character
-            
-            // Common OCR/extraction issues
-            { "Ɵ", "ti" },      // Sometimes ti appears as this character
-            { "ɵ", "ti" },      // Alternative ti replacement
-            { "ʄ", "ft" },      // Sometimes ft appears as this character
-        };
-
-        foreach (var replacement in ligatureReplacements)
-        {
-            text = text.Replace(replacement.Key, replacement.Value);
-        }
-
-        return text;
-    }
 }
