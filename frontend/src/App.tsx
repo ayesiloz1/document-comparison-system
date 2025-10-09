@@ -150,13 +150,13 @@ function App() {
               className="view-btn"
               onClick={() => setViewMode('sections')}
             >
-              � Section-by-Section View
+              Section-by-Section View
             </button>
             <button 
               className="export-btn"
               onClick={() => handleSectionExport(result)}
             >
-              📥 Export Report
+              Export Report
             </button>
           </div>
         </div>
@@ -356,7 +356,7 @@ function App() {
             onClick={handleCompare}
             disabled={!files.file1 || !files.file2 || isLoading}
           >
-            {isLoading ? '🔄 Analyzing...' : '🔍 Compare Documents'}
+            {isLoading ? '🔄 Analyzing...' :  'Compare Documents'}
           </button>
         </div>
       </div>
