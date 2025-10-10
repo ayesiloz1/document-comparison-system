@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { exportReport, compareSections } from './utils/api';
 import { ComparisonResult, SectionComparisonResult } from './utils/types';
+import { createStructuredAnalysis } from './utils/aiFormatting';
 import SectionChunkView from './components/SectionChunkView';
 import './index.css';
 
@@ -17,7 +18,7 @@ function App() {
     {
       id: '1',
       type: 'bot',
-      content: "Welcome to the Document Comparison System. Upload two PDF documents to analyze their differences with intelligent insights.",
+      content: "Welcome to DocuVision- Advanced AI-powered document analysis. Upload two PDF documents to discover intelligent insights and comprehensive comparisons.",
       timestamp: new Date()
     }
   ]);
@@ -107,43 +108,12 @@ function App() {
       
       const resultComponent = (
         <div className="result-card">
-          <div className="similarity-score">
-            <div className={`score-circle ${
-              result.overallSimilarity > 0.8 ? 'score-high' : 
-              result.overallSimilarity > 0.5 ? 'score-medium' : 'score-low'
-            }`}>
-              {Math.round(result.overallSimilarity * 100)}%
-            </div>
-            <div>
-              <h3>Overall Similarity</h3>
-              <p>Documents are {Math.round(result.overallSimilarity * 100)}% similar</p>
-            </div>
-          </div>
-          
           {result.aiSectionInsights && (
             <div className="ai-summary">
               <h4>AI Analysis Summary</h4>
-              <p>{result.aiSectionInsights.overallSummary}</p>
+              {createStructuredAnalysis(result.aiSectionInsights.overallSummary)}
             </div>
           )}
-          
-          <div className="diff-section">
-            <h4>Section Analysis ({result.sectionComparisons.length} sections compared)</h4>
-            <div className="section-stats">
-              <div className="stat-item">
-                <strong>{result.aiSectionInsights.changeStatistics.addedSections}</strong> Added Sections
-              </div>
-              <div className="stat-item">
-                <strong>{result.aiSectionInsights.changeStatistics.deletedSections}</strong> Removed Sections
-              </div>
-              <div className="stat-item">
-                <strong>{result.aiSectionInsights.changeStatistics.modifiedSections}</strong> Modified Sections
-              </div>
-              <div className="stat-item">
-                <strong>{result.aiSectionInsights.changeStatistics.unchangedSections}</strong> Unchanged Sections
-              </div>
-            </div>
-          </div>
           
           <div className="action-buttons">
             <button 
@@ -202,7 +172,7 @@ function App() {
       ...prev,
       [`file${fileNumber}`]: null
     }));
-    addMessage('user', `🗑️ Removed ${fileNumber === 1 ? 'first' : 'second'} document`);
+    addMessage('user', `Removed ${fileNumber === 1 ? 'first' : 'second'} document`);
   };
 
   const TypingIndicator = () => (
@@ -232,7 +202,7 @@ function App() {
     return (
       <div className="app">
         <div className="header">
-          <h1>Document Comparison System</h1>
+          <h1>DocuVision</h1>
           <div className="view-mode-toggle">
             <p>AI-powered section-by-section document analysis</p>
             <button 
@@ -260,8 +230,8 @@ function App() {
   return (
     <div className="app">
       <div className="header">
-        <h1>Document Comparison System</h1>
-        <p>Professional PDF document analysis with AI insights</p>
+        <h1>DocuVision</h1>
+        <p>Document comparison system</p>
       </div>
 
       <div className="chat-container">
@@ -304,7 +274,7 @@ function App() {
               else if (!files.file2) file2InputRef.current?.click();
             }}
           >
-            <div className="upload-icon">📄</div>
+            <div className="upload-icon"></div>
             <p>
               {!files.file1 && !files.file2 
                 ? 'Drop your first PDF here or click to browse'
@@ -336,16 +306,16 @@ function App() {
             <div className="uploaded-files">
               {files.file1 && (
                 <div className="file-item">
-                  <span className="file-icon">📄</span>
+                  <span className="file-icon">PDF</span>
                   <span>{files.file1.name}</span>
-                  <span className="remove-btn remove-file-btn" onClick={() => removeFile(1)}>❌</span>
+                  <span className="remove-btn remove-file-btn" onClick={() => removeFile(1)}>×</span>
                 </div>
               )}
               {files.file2 && (
                 <div className="file-item">
-                  <span className="file-icon">📄</span>
+                  <span className="file-icon">PDF</span>
                   <span>{files.file2.name}</span>
-                  <span className="remove-btn remove-file-btn" onClick={() => removeFile(2)}>❌</span>
+                  <span className="remove-btn remove-file-btn" onClick={() => removeFile(2)}>×</span>
                 </div>
               )}
             </div>
@@ -356,7 +326,7 @@ function App() {
             onClick={handleCompare}
             disabled={!files.file1 || !files.file2 || isLoading}
           >
-            {isLoading ? '🔄 Analyzing...' :  'Compare Documents'}
+            {isLoading ? 'Analyzing...' :  'Compare Documents'}
           </button>
         </div>
       </div>

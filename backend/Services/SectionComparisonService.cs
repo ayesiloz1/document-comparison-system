@@ -4,6 +4,7 @@ using DocumentComparer.Utils;
 using iText.Kernel.Pdf;
 using iText.Kernel.Pdf.Canvas.Parser;
 using iText.Kernel.Pdf.Canvas.Parser.Listener;
+using System.Text;
 using System.Text.RegularExpressions;
 
 namespace DocumentComparer.Services;
@@ -324,7 +325,7 @@ public class SectionComparisonService : ISectionComparisonService
             }
         }
         
-        // Generate AI summary for this comparison (use fast mode for efficiency)
+        // Generate concise AI summary for this comparison 
         comparison.AISummary = await GenerateFastSectionAISummary(comparison);
         
         return comparison;
@@ -392,10 +393,10 @@ Explain why this section remained stable and its ongoing significance."
         {
             var prompt = comparison.ChangeType switch
             {
-                SectionChangeType.Added => $"Briefly summarize this new section: {comparison.SectionB?.Title ?? "Untitled"}\nContent: {TruncateContent(comparison.SectionB?.Content, 200)}",
-                SectionChangeType.Deleted => $"Briefly summarize this removed section: {comparison.SectionA?.Title ?? "Untitled"}\nContent: {TruncateContent(comparison.SectionA?.Content, 200)}",
-                SectionChangeType.Modified => $"Briefly describe changes in '{comparison.SectionA?.Title ?? "Section"}': Original had {comparison.SectionA?.Content?.Length ?? 0} chars, new has {comparison.SectionB?.Content?.Length ?? 0} chars. Key changes: {GetKeyChangesHint(comparison)}",
-                _ => $"Section '{comparison.SectionA?.Title ?? "Untitled"}' remained unchanged."
+                SectionChangeType.Added => $"One sentence summary of new section '{comparison.SectionB?.Title ?? "Untitled"}': {TruncateContent(comparison.SectionB?.Content, 150)}",
+                SectionChangeType.Deleted => $"One sentence summary of removed section '{comparison.SectionA?.Title ?? "Untitled"}': {TruncateContent(comparison.SectionA?.Content, 150)}",
+                SectionChangeType.Modified => $"One sentence describing key changes to '{comparison.SectionA?.Title ?? "Section"}' ({Math.Abs((comparison.SectionB?.Content?.Length ?? 0) - (comparison.SectionA?.Content?.Length ?? 0))} character difference)",
+                _ => $"Section '{comparison.SectionA?.Title ?? "Untitled"}' unchanged."
             };
             
             return await _openAiService.GenerateFastSummaryAsync(prompt);
@@ -465,9 +466,74 @@ Explain why this section remained stable and its ongoing significance."
             var changedSections = addedCount + deletedCount + modifiedCount;
             var changePercentage = totalSections > 0 ? (double)changedSections / totalSections * 100 : 0;
             
-            var overallSummary = await _openAiService.GenerateFastSummaryAsync(
-                $@"Document comparison: {addedCount} added, {deletedCount} deleted, {modifiedCount} modified sections out of {totalSections} total ({changePercentage:F0}% changed). " +
-                $"Assess if this is a {(changePercentage > 70 ? "major overhaul" : changePercentage > 30 ? "significant update" : "minor revision")} and provide brief business impact analysis.");
+            // Get detailed information about the changes
+            var addedSections = comparisons.Where(c => c.ChangeType == SectionChangeType.Added).ToList();
+            var deletedSections = comparisons.Where(c => c.ChangeType == SectionChangeType.Deleted).ToList();
+            var modifiedSections = comparisons.Where(c => c.ChangeType == SectionChangeType.Modified).ToList();
+            
+            // Create detailed context for AI analysis
+            var sectionDetails = new StringBuilder();
+            
+            if (addedSections.Any())
+            {
+                sectionDetails.AppendLine("NEWLY ADDED SECTIONS:");
+                foreach (var section in addedSections.Take(3))
+                {
+                    sectionDetails.AppendLine($"• {section.SectionB?.Title ?? "Untitled"} (Page {section.PageNumberB}) - {section.SectionB?.SectionType}");
+                }
+                if (addedSections.Count > 3) sectionDetails.AppendLine($"• ... and {addedSections.Count - 3} more added sections");
+                sectionDetails.AppendLine();
+            }
+            
+            if (deletedSections.Any())
+            {
+                sectionDetails.AppendLine("REMOVED SECTIONS:");
+                foreach (var section in deletedSections.Take(3))
+                {
+                    sectionDetails.AppendLine($"• {section.SectionA?.Title ?? "Untitled"} (Page {section.PageNumberA}) - {section.SectionA?.SectionType}");
+                }
+                if (deletedSections.Count > 3) sectionDetails.AppendLine($"• ... and {deletedSections.Count - 3} more removed sections");
+                sectionDetails.AppendLine();
+            }
+            
+            if (modifiedSections.Any())
+            {
+                sectionDetails.AppendLine("MODIFIED SECTIONS:");
+                foreach (var section in modifiedSections.Take(3))
+                {
+                    var sizeDiff = (section.SectionB?.Content?.Length ?? 0) - (section.SectionA?.Content?.Length ?? 0);
+                    var changeDirection = sizeDiff > 0 ? "expanded" : sizeDiff < 0 ? "condensed" : "restructured";
+                    sectionDetails.AppendLine($"• {section.SectionA?.Title ?? "Untitled"} - {changeDirection} ({Math.Abs(sizeDiff)} characters)");
+                }
+                if (modifiedSections.Count > 3) sectionDetails.AppendLine($"• ... and {modifiedSections.Count - 3} more modified sections");
+            }
+
+            var overallSummary = await _openAiService.GenerateSimpleSummaryAsync(
+                $@"Conduct a comprehensive document comparison analysis with the following comprehensive data:
+
+DOCUMENT OVERVIEW:
+- Total Sections Analyzed: {totalSections}
+- Sections Added: {addedCount}
+- Sections Deleted: {deletedCount} 
+- Sections Modified: {modifiedCount}
+- Sections Unchanged: {comparisons.Count(c => c.ChangeType == SectionChangeType.Unchanged)}
+- Overall Change Rate: {changePercentage:F1}% of document changed
+
+CHANGE CLASSIFICATION:
+This represents a {(changePercentage > 70 ? "MAJOR OVERHAUL" : changePercentage > 40 ? "SIGNIFICANT UPDATE" : changePercentage > 15 ? "MODERATE REVISION" : "MINOR UPDATE")} of the document.
+
+DETAILED SECTION ANALYSIS:
+{sectionDetails}
+
+ANALYSIS REQUIREMENTS:
+Provide a comprehensive analysis that includes:
+1. The nature and scope of changes (what types of content were affected)
+2. Business impact assessment (how these changes might affect operations, compliance, or processes)
+3. Risk analysis (potential implications of major additions/deletions)
+4. Implementation considerations (what organizations need to know about these changes)
+5. Overall assessment of document evolution and its significance
+
+Write in a professional, analytical tone suitable for executive review. Focus on actionable insights and business implications rather than technical details.");
             
             return new AISectionInsights
             {

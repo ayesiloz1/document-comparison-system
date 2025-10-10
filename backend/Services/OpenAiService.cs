@@ -263,25 +263,31 @@ Advanced comparison algorithms utilized for precise change detection and classif
                 
                 var messages = new ChatMessage[]
                 {
-                    new SystemChatMessage(@"You are a professional document analysis expert. Provide detailed, comprehensive analysis with the following characteristics:
-- Use 3-5 sentences minimum for each analysis
-- Include specific details about changes, additions, or deletions
-- Explain the business impact or significance of changes
-- Use professional, analytical language
-- Identify key terminology, concepts, and structural changes
-- Provide context about why changes might have been made
-- Be thorough and informative while remaining clear and organized"),
+                    new SystemChatMessage(@"You are a senior document analysis expert providing comprehensive, executive-level analysis. Deliver detailed insights with these characteristics:
+- Write 4-6 sentences minimum for thorough analysis in well-structured paragraphs
+- Provide specific details about content changes, additions, or deletions with context
+- Explain business impact, operational implications, and strategic significance
+- Use professional, analytical language suitable for executive review
+- Identify key terminology, concepts, structural changes, and their implications
+- Provide context about likely reasons for changes and their necessity
+- Include risk assessment and implementation considerations where relevant
+- Be comprehensive, insightful, and actionable while maintaining clarity
+- Focus on 'what changed', 'why it matters', and 'what it means for the organization'
+- Use clear section headers followed by detailed explanations
+- DO NOT use markdown formatting (**, *, etc.) - use plain text with clear section titles followed by colons
+- Structure your response with clear section headers like 'Nature and Scope of Changes:', 'Business Impact Assessment:', etc."),
                     new UserChatMessage(prompt)
                 };
 
                 var options = new ChatCompletionOptions
                 {
-                    MaxOutputTokenCount = 500, // Increased from 150 to 500 for more detailed responses
+                    MaxOutputTokenCount = 800, // Increased to 800 for even more comprehensive analysis
                     Temperature = 0.3f
                 };
 
                 var response = await chatClient.CompleteChatAsync(messages, options, cancellationToken);
-                return response.Value.Content[0].Text ?? "AI summary unavailable";
+                var rawResponse = response.Value.Content[0].Text ?? "AI summary unavailable";
+                return CleanupAIResponse(rawResponse);
             }
             catch
             {
@@ -302,13 +308,13 @@ Advanced comparison algorithms utilized for precise change detection and classif
                 
                 var messages = new ChatMessage[]
                 {
-                    new SystemChatMessage("You are a document analysis assistant. Provide brief, concise summaries in 1-2 sentences maximum. Be direct and factual."),
+                    new SystemChatMessage("Provide very brief, one sentence summaries only. Be concise and factual. Maximum 15 words."),
                     new UserChatMessage(prompt)
                 };
 
                 var options = new ChatCompletionOptions
                 {
-                    MaxOutputTokenCount = 100, // Much shorter for speed
+                    MaxOutputTokenCount = 50, // Very short for individual sections
                     Temperature = 0.1f // Lower temperature for faster, more predictable responses
                 };
 
@@ -319,6 +325,31 @@ Advanced comparison algorithms utilized for precise change detection and classif
             {
                 return "AI analysis unavailable";
             }
+        }
+
+        private string CleanupAIResponse(string response)
+        {
+            if (string.IsNullOrEmpty(response))
+                return response;
+
+            // Remove markdown bold formatting
+            response = response.Replace("**", "");
+            
+            // Clean up section headers - convert "**Section:** " to "Section: "
+            response = System.Text.RegularExpressions.Regex.Replace(response, @"\*\*(.*?):\*\*", "$1:");
+            
+            // Add proper spacing after section headers
+            response = System.Text.RegularExpressions.Regex.Replace(response, @"([A-Z][^:]*:)(\s*)", "$1\n");
+            
+            // Clean up multiple spaces and line breaks
+            response = System.Text.RegularExpressions.Regex.Replace(response, @"\s+", " ");
+            response = System.Text.RegularExpressions.Regex.Replace(response, @"\n\s*\n", "\n\n");
+            
+            // Ensure proper paragraph structure
+            response = response.Replace(". ", ".\n\n");
+            response = System.Text.RegularExpressions.Regex.Replace(response, @"\n{3,}", "\n\n");
+            
+            return response.Trim();
         }
     }
 }
