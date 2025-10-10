@@ -4,6 +4,8 @@ import { exportReport, compareSections } from './utils/api';
 import { ComparisonResult, SectionComparisonResult } from './utils/types';
 import { createStructuredAnalysis } from './utils/aiFormatting';
 import SectionChunkView from './components/SectionChunkView';
+import Logo from './components/Logo';
+import LogoIcon from './components/LogoIcon';
 import './index.css';
 
 interface Message {
@@ -182,7 +184,7 @@ function App() {
       animate={{ opacity: 1, y: 0 }}
     >
       <div className="avatar bot">
-        🤖
+        <LogoIcon size={20} animated={true} />
       </div>
       <div className="message-content">
         <div className="typing-indicator">
@@ -202,7 +204,9 @@ function App() {
     return (
       <div className="app">
         <div className="header">
-          <h1>DocuVision</h1>
+          <div className="header-brand">
+            <Logo size="medium" />
+          </div>
           <div className="view-mode-toggle">
             <p>AI-powered section-by-section document analysis</p>
             <button 
@@ -230,8 +234,9 @@ function App() {
   return (
     <div className="app">
       <div className="header">
-        <h1>DocuVision</h1>
-        <p>Document comparison system</p>
+        <div className="header-brand">
+          <Logo size="large" />
+        </div>
       </div>
 
       <div className="chat-container">
@@ -246,7 +251,7 @@ function App() {
                 exit={{ opacity: 0, y: -10 }}
               >
                 <div className={`avatar ${message.type}`}>
-                  {message.type === 'bot' ? 'AI' : 'U'}
+                  {message.type === 'bot' ? <LogoIcon size={20} /> : 'U'}
                 </div>
                 <div className="message-content">
                   {typeof message.content === 'string' ? (
