@@ -234,3 +234,9 @@ For support, email your-email@example.com or create an issue in this repository.
 ---
 
 **Built with ❤️ for professional document analysis**
+
+---
+
+Need a deeper dive? See the detailed step-by-step walkthrough:
+
+- docs/PROJECT_OVERVIEW.md
